@@ -16,6 +16,7 @@ import re
 import datetime
 import traceback
 from typing import Dict, Optional, List, Tuple, Union, Iterable, Any, Set
+import json
 
 import torch
 import torch.optim.lr_scheduler
@@ -35,6 +36,40 @@ from allennlp.training.learning_rate_schedulers import LearningRateScheduler
 from allennlp.training.optimizers import Optimizer
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+predictions_file = "scripts/predictions.json"
+
+def print_validation_results_to_json_file(output_dict_list):
+     for output_dict in output_dict_list:
+         best_span_str_list = output_dict["best_span_str"]
+         qid_list = output_dict["qid"]
+         yesno = output_dict["yesno"]
+         followup = output_dict["followup"]
+         f = open(predictions_file, 'a')
+ 
+         for i, best_span in enumerate(best_span_str_list):
+             new_output_dict = dict()
+             new_output_dict["best_span_str"] = best_span_str_list[i]
+             new_output_dict["yesno"] = convert_list_to_integer_for_json_serializeble(yesno[i])
+             new_output_dict["qid"] = qid_list[i]
+             new_output_dict["followup"] = convert_list_to_integer_for_json_serializeble(followup[i])
+             #json_str_new_output_dict = json.dumps(new_output_dict)
+             #json_str_new_output_dict = json_str_new_output_dict
+             #print ((new_output_dict), file = f)
+             #json.dump(json_str_new_output_dict, f)
+             data = json.dumps(new_output_dict)
+             f.write(data)
+             f.write('\n')
+ 
+         f.close()
+
+def convert_list_to_integer_for_json_serializeble(list_of_int64):
+    list_of_integer = list()
+    for i in list_of_int64:
+        list_of_integer.append(int(i))
+
+    return list_of_integer
+
 
 
 def is_sparse(tensor):
@@ -431,6 +466,8 @@ class Trainer(Registrable):
 
         try:
             loss = output_dict["loss"]
+            #if not for_training:
+            #    print_validation_results_to_json_file(output_dict)
             if for_training:
                 loss += self.model.get_regularization_penalty()
         except KeyError:
@@ -439,7 +476,7 @@ class Trainer(Registrable):
                                    " 'loss' key in the output of model.forward(inputs).")
             loss = None
 
-        return loss
+        return loss, output_dict
 
     def _get_metrics(self, total_loss: float, num_batches: int, reset: bool = False) -> Dict[str, float]:
         """
@@ -482,7 +519,9 @@ class Trainer(Registrable):
         logger.info("Training")
         train_generator_tqdm = Tqdm.tqdm(train_generator,
                                          total=num_training_batches)
+
         for batch in train_generator_tqdm:
+            
             batches_this_epoch += 1
             self._batch_num_total += 1
             batch_num_total = self._batch_num_total
@@ -492,7 +531,7 @@ class Trainer(Registrable):
 
             self.optimizer.zero_grad()
 
-            loss = self.batch_loss(batch, for_training=True)
+            loss, _ = self.batch_loss(batch, for_training=True)
             if torch.isnan(loss):
                 raise ValueError("nan loss encountered")
 
@@ -708,9 +747,11 @@ class Trainer(Registrable):
                                        total=num_validation_batches)
         batches_this_epoch = 0
         val_loss = 0
+        output_dict_list = list()
         for batch in val_generator_tqdm:
 
-            loss = self.batch_loss(batch, for_training=False)
+            loss, output_dict = self.batch_loss(batch, for_training=False)
+            output_dict_list.append(output_dict)
             if loss is not None:
                 # You shouldn't necessarily have to compute a loss for validation, so we allow for
                 # `loss` to be None.  We need to be careful, though - `batches_this_epoch` is
@@ -725,7 +766,7 @@ class Trainer(Registrable):
             description = self._description_from_metrics(val_metrics)
             val_generator_tqdm.set_description(description, refresh=False)
 
-        return val_loss, batches_this_epoch
+        return val_loss, batches_this_epoch, output_dict_list
 
     def train(self) -> Dict[str, Any]:
         """
@@ -750,6 +791,7 @@ class Trainer(Registrable):
         epochs_trained = 0
         training_start_time = time.time()
 
+
         for epoch in range(epoch_counter, self._num_epochs):
             epoch_start_time = time.time()
             train_metrics = self._train_epoch(epoch)
@@ -757,7 +799,7 @@ class Trainer(Registrable):
             if self._validation_data is not None:
                 with torch.no_grad():
                     # We have a validation set, so compute all the metrics on it.
-                    val_loss, num_batches = self._validation_loss()
+                    val_loss, num_batches, output_dict_list = self._validation_loss()
                     val_metrics = self._get_metrics(val_loss, num_batches, reset=True)
 
                     # Check validation metric for early stopping
@@ -765,6 +807,10 @@ class Trainer(Registrable):
 
                     # Check validation metric to see if it's the best so far
                     is_best_so_far = self._is_best_so_far(this_epoch_val_metric, validation_metric_per_epoch)
+                    if is_best_so_far:
+                        if os.path.exists(predictions_file):
+                            os.remove(predictions_file)
+                        print_validation_results_to_json_file(output_dict_list)
                     validation_metric_per_epoch.append(this_epoch_val_metric)
                     if self._should_stop_early(validation_metric_per_epoch):
                         logger.info("Ran out of patience.  Stopping training.")
@@ -797,6 +843,7 @@ class Trainer(Registrable):
                 metrics['best_epoch'] = epoch
                 for key, value in val_metrics.items():
                     metrics["best_validation_" + key] = value
+           
 
             if self._serialization_dir:
                 dump_metrics(os.path.join(self._serialization_dir, f'metrics_epoch_{epoch}.json'), metrics)

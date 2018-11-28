@@ -20,8 +20,8 @@ from allennlp.training.metrics import Average, BooleanAccuracy, CategoricalAccur
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-@Model.register("dialog_qa")
-class DialogQA(Model):
+@Model.register("dialog_qa_ques_dia_vanilla_attention")
+class DialogQAQuesDiaVanillaAttention(Model):
     """
     This class implements modified version of BiDAF
     (with self attention and residual layer, from Clark and Gardner ACL 17 paper) model as used in
@@ -312,6 +312,11 @@ class DialogQA(Model):
         #logger.info("encoded_question 2222  %s", encoded_question.shape)
         #logger.info("self._encoding_dim  %s", self._encoding_dim)
         
+        encoded_question = torch.cat([encoded_question, 
+                                      question_dialog_vectors],
+                                    dim=-1)
+       
+        encoded_question = F.relu(self.t(encoded_question))
 
 
         #logger.info("encoded_question 3333333  %s", encoded_question.shape)
@@ -339,31 +344,6 @@ class DialogQA(Model):
         tiled_question_passage_vector = question_passage_vector.unsqueeze(1).expand(total_qa_count,
                                                                                     passage_length,
                                                                                     self._encoding_dim)
-
-        ############################################## Create qc for question tokens #########################################
-
-        masked_similarity = util.replace_masked_values(dialog_question_similarity,
-                                                       dialog_mask.unsqueeze(1),
-                                                       -1e7)
-
-        dialog_question_similarity = masked_similarity.max(dim=-1)[0].squeeze(-1)
-        dialog_question_attention = util.masked_softmax(dialog_question_similarity, question_mask)
-        # Shape: (batch_size * max_qa_count, encoding_dim)
-        dialog_question_vector = util.weighted_sum(encoded_question, dialog_question_attention)
-        tiled_dialog_question_vector = dialog_question_vector.unsqueeze(1).expand(total_qa_count,
-                                                                                    max_q_len,
-                                                                                    self._encoding_dim)
-        
-
-        encoded_question = torch.cat([encoded_question, 
-                                      question_dialog_vectors, 
-                                      encoded_question * question_dialog_vectors, 
-                                      encoded_question*tiled_dialog_question_vector], dim=-1)
-       
-        #encoded_question = self.t(encoded_question)
-        encoded_question = F.relu(self._merge_atten(encoded_question))
-
-        ######################################################################################################################
 
         # Shape: (batch_size * max_qa_count, passage_length, encoding_dim * 4)
         final_merged_passage = torch.cat([repeated_encoded_passage,

@@ -24,7 +24,7 @@
     },
     "iterator": {
         "type": "bucket",
-        "batch_size": 10,
+        "batch_size": 7, # Change back to 10
         "max_instances_in_memory": 1000,
         "sorting_keys": [
             [
@@ -38,7 +38,9 @@
         ]
     },
     "model": {
-        "type": "dialog_qa",
+        #"type": "dialog_qa",
+        "type": "dialog_qa_ques_dia_vanilla_attention",
+        #"type": "dialog_qa_ques_dia_bi_attention",
         "dropout": 0.2,
         "initializer": [],
         "marker_embedding_dim": 10,

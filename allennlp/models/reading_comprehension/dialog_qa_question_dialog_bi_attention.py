@@ -20,8 +20,8 @@ from allennlp.training.metrics import Average, BooleanAccuracy, CategoricalAccur
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
 
-@Model.register("dialog_qa")
-class DialogQA(Model):
+@Model.register("dialog_qa_ques_dia_bi_attention")
+class DialogQAQuesDiaBiAttention(Model):
     """
     This class implements modified version of BiDAF
     (with self attention and residual layer, from Clark and Gardner ACL 17 paper) model as used in

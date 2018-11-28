@@ -61,6 +61,7 @@ class QuACReader(DatasetReader):
         for article in dataset:
             for paragraph_json in article['paragraphs']:
                 paragraph = paragraph_json["context"]
+                paragraph = paragraph + " " + "QUESTION_BEGIN" + " " + "ANSWER_BEGIN"
                 tokenized_paragraph = self._tokenizer.tokenize(paragraph)
                 qas = paragraph_json['qas']
                 metadata = {}

@@ -105,7 +105,7 @@ class TextField(SequenceField[Dict[str, torch.Tensor]]):
             # It's fine to iterate over the keys of the first token since all tokens have the same keys.
             for key in token_lengths[0]:
                 indexer_lengths[key] = max(x[key] if key in x else 0 for x in token_lengths)
-            lengths.append(indexer_lengths)
+            lengths.append(indexer_lengths)  
 
         indexer_sequence_lengths = {key: len(val) for key, val in self._indexed_tokens.items()}
         # Get the padding lengths for sequence lengths.
@@ -121,6 +121,12 @@ class TextField(SequenceField[Dict[str, torch.Tensor]]):
         padding_keys = {key for d in lengths for key in d.keys()}
         for padding_key in padding_keys:
             padding_lengths[padding_key] = max(x[padding_key] if padding_key in x else 0 for x in lengths)
+
+        # If the padding length does not contain a field called "num_token_characters" then 
+        # this means that the answer or dialog field is blank and hence the above indexers
+        # did not add any field called "num_token_characters". Hence we add it
+        if 'num_token_characters' not in padding_lengths:
+            padding_lengths['num_token_characters'] = 0
         return padding_lengths
 
     @overrides

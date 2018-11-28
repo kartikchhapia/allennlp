@@ -304,10 +304,13 @@ def make_reading_comprehension_instance_quac(question_list_tokens: List[List[Tok
         p1_span_start, p1_span_end, p2_span_start = -1, -1, -1
         p2_span_end, p3_span_start, p3_span_end = -1, -1, -1
         # Looping each <<answers>>.
+        answer_list_tokens = list()
         for question_index, answer_span_lists in enumerate(token_span_lists):
             span_start, span_end = answer_span_lists[-1]  # Last one is the original answer
             span_start_list.append(IndexField(span_start, passage_field))
             span_end_list.append(IndexField(span_end, passage_field))
+            answer_tokens = passage_tokens[span_start:span_end]
+            answer_list_tokens.append(answer_tokens)
             prev_answer_marker_lists = [["O"] * len(passage_tokens), ["O"] * len(passage_tokens),
                                         ["O"] * len(passage_tokens), ["O"] * len(passage_tokens)]
             if question_index > 0 and num_context_answers > 0:
@@ -336,6 +339,57 @@ def make_reading_comprehension_instance_quac(question_list_tokens: List[List[Tok
                                                                 label_namespace="answer_tags"))
         fields['span_start'] = ListField(span_start_list)
         fields['span_end'] = ListField(span_end_list)
+
+        dialog_list_tokens = list()
+        #dialog_list_tokens.append([]) #### For firwst question dialog is null
+        dialog_tokens_string_as_list = [] 
+        for diag_idx in range(len(question_list_tokens)):
+            t = []
+            if diag_idx > num_context_answers:
+                t +=  [passage_tokens[-2]]+ question_list_tokens[0] + [passage_tokens[-1]] +  answer_list_tokens[0]
+            for prev_idx in range(max(diag_idx - num_context_answers, 0), diag_idx):
+                t += [passage_tokens[-2]]+ question_list_tokens[prev_idx] + [passage_tokens[-1]] +  answer_list_tokens[prev_idx]
+            dialog_list_tokens.append(t)
+        #fields['dialog'] = ListField([TextField(d_tokens, token_indexers) for d_tokens in dialog_list_tokens])
+       
+        dialog_list_tokens = list()
+        #dialog_list_tokens.append([]) #### For firwst question dialog is null
+        dialog_tokens_string_as_list = [] 
+        for diag_idx in range(len(question_list_tokens)):
+            t = []
+            for prev_idx in range(max(diag_idx - num_context_answers, 0), diag_idx):
+                t += [passage_tokens[-2]]+ question_list_tokens[prev_idx] + [passage_tokens[-1]] +  answer_list_tokens[prev_idx]
+            dialog_list_tokens.append(t)
+        #fields['dialog'] = ListField([TextField(d_tokens, token_indexers) for d_tokens in dialog_list_tokens])
+       
+
+       ### Creating entire dialog field
+
+        dialog_list_tokens = list()
+        dialog_list_tokens.append([]) #### For firwst question dialog is null
+        dialog_tokens_string_as_list = [] 
+        for ques_tokens, ans_tokens in list(zip(question_list_tokens, answer_list_tokens))[:-1]:
+            dialog_tokens_string_as_list = dialog_tokens_string_as_list  + [passage_tokens[-2]]+ ques_tokens + [passage_tokens[-1]] +  ans_tokens 
+            dialog_list_tokens.append(dialog_tokens_string_as_list)
+        fields['dialog'] = ListField([TextField(d_tokens, token_indexers) for d_tokens in dialog_list_tokens])
+        fields['answer'] = ListField([TextField(a_tokens, token_indexers) for a_tokens in answer_list_tokens])
+    
+        
+        questions_answer_appended_list = list()
+        for q_tok, a_tok in zip(question_list_tokens, answer_list_tokens):
+            if q_tok == question_list_tokens[0]:
+                ques_ans_tokens = q_tok
+            else:
+                ques_ans_tokens = q_tok + [passage_tokens[-1]] + prev_ans_tokens
+            questions_answer_appended_list.append(ques_ans_tokens)
+            prev_ans_tokens = a_tok
+        
+        fields['previous_answer_appended'] = ListField([TextField(tok, token_indexers) for tok in questions_answer_appended_list]) 
+
+
+        #print ("question_list_tokens", question_list_tokens)
+        #print ("answer_list_tokens", answer_list_tokens)
+        #print ("prev answer list is ", fields['previous_answer_appended'])               
         if num_context_answers > 0:
             fields['p1_answer_marker'] = ListField(p1_answer_marker_list)
             if num_context_answers > 1:
@@ -348,6 +402,11 @@ def make_reading_comprehension_instance_quac(question_list_tokens: List[List[Tok
                                              for followup in followup_list])
     metadata.update(additional_metadata)
     fields['metadata'] = MetadataField(metadata)
+    #print ("question_list_tokens", question_list_tokens)
+    #print ("answer_list_tokens", answer_list_tokens)
+    #print ("\nfields question ", fields['question'])
+    #print ("\nfields answer ", fields['answer'])
+    #print ("\nfields dialog ", fields['dialog'])
     return Instance(fields)
 
 

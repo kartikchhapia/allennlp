@@ -93,7 +93,7 @@ class Instance(Mapping[str, Field]):
         """
         padding_lengths = padding_lengths or self.get_padding_lengths()
         tensors = {}
-        for field_name, field in self.fields.items():
+        for field_name, field in self.fields.items(): 
             tensors[field_name] = field.as_tensor(padding_lengths[field_name])
         return tensors
 

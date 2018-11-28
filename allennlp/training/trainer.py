@@ -37,38 +37,7 @@ from allennlp.training.optimizers import Optimizer
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
-predictions_file = "scripts/predictions.json"
 
-def print_validation_results_to_json_file(output_dict_list):
-     for output_dict in output_dict_list:
-         best_span_str_list = output_dict["best_span_str"]
-         qid_list = output_dict["qid"]
-         yesno = output_dict["yesno"]
-         followup = output_dict["followup"]
-         f = open(predictions_file, 'a')
- 
-         for i, best_span in enumerate(best_span_str_list):
-             new_output_dict = dict()
-             new_output_dict["best_span_str"] = best_span_str_list[i]
-             new_output_dict["yesno"] = convert_list_to_integer_for_json_serializeble(yesno[i])
-             new_output_dict["qid"] = qid_list[i]
-             new_output_dict["followup"] = convert_list_to_integer_for_json_serializeble(followup[i])
-             #json_str_new_output_dict = json.dumps(new_output_dict)
-             #json_str_new_output_dict = json_str_new_output_dict
-             #print ((new_output_dict), file = f)
-             #json.dump(json_str_new_output_dict, f)
-             data = json.dumps(new_output_dict)
-             f.write(data)
-             f.write('\n')
- 
-         f.close()
-
-def convert_list_to_integer_for_json_serializeble(list_of_int64):
-    list_of_integer = list()
-    for i in list_of_int64:
-        list_of_integer.append(int(i))
-
-    return list_of_integer
 
 
 
@@ -321,6 +290,7 @@ class Trainer(Registrable):
         self._num_epochs = num_epochs
 
         self._serialization_dir = serialization_dir
+        self._predictions_file = serialization_dir + "/predictions.json"
         self._num_serialized_models_to_keep = num_serialized_models_to_keep
         self._keep_serialized_model_every_num_seconds = keep_serialized_model_every_num_seconds
         self._serialized_paths: List[Any] = []
@@ -808,9 +778,9 @@ class Trainer(Registrable):
                     # Check validation metric to see if it's the best so far
                     is_best_so_far = self._is_best_so_far(this_epoch_val_metric, validation_metric_per_epoch)
                     if is_best_so_far:
-                        if os.path.exists(predictions_file):
-                            os.remove(predictions_file)
-                        print_validation_results_to_json_file(output_dict_list)
+                        if os.path.exists(self._predictions_file):
+                            os.remove(self._predictions_file)
+                        self.print_validation_results_to_json_file(output_dict_list)
                     validation_metric_per_epoch.append(this_epoch_val_metric)
                     if self._should_stop_early(validation_metric_per_epoch):
                         logger.info("Ran out of patience.  Stopping training.")
@@ -987,6 +957,38 @@ class Trainer(Registrable):
                                            "training_state_epoch_{}.th".format(epoch_to_load))
 
         return (model_path, training_state_path)
+
+
+    def print_validation_results_to_json_file(self, output_dict_list):
+         for output_dict in output_dict_list:
+             best_span_str_list = output_dict["best_span_str"]
+             qid_list = output_dict["qid"]
+             yesno = output_dict["yesno"]
+             followup = output_dict["followup"]
+             f = open(self._predictions_file, 'a')
+     
+             for i, best_span in enumerate(best_span_str_list):
+                 new_output_dict = dict()
+                 new_output_dict["best_span_str"] = best_span_str_list[i]
+                 new_output_dict["yesno"] = self.convert_list_to_integer_for_json_serializeble(yesno[i])
+                 new_output_dict["qid"] = qid_list[i]
+                 new_output_dict["followup"] = self.convert_list_to_integer_for_json_serializeble(followup[i])
+                 #json_str_new_output_dict = json.dumps(new_output_dict)
+                 #json_str_new_output_dict = json_str_new_output_dict
+                 #print ((new_output_dict), file = f)
+                 #json.dump(json_str_new_output_dict, f)
+                 data = json.dumps(new_output_dict)
+                 f.write(data)
+                 f.write('\n')
+     
+             f.close()
+    
+    def convert_list_to_integer_for_json_serializeble(self, list_of_int64):
+        list_of_integer = list()
+        for i in list_of_int64:
+            list_of_integer.append(int(i))
+    
+        return list_of_integer
 
     def _restore_checkpoint(self) -> Tuple[int, List[float]]:
         """

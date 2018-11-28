@@ -8,6 +8,7 @@ ARRAY=(quac_question_appended_with_attention_from_dialog_1 \
 
 for i in ${ARRAY[@]}; do
     echo "Doing for ${i}"
+    grep "Epoch" ../${i}/stdout.log  | tail -1
     python scorer.py --val_file val.json --model_output ../${i}/predictions.json
 
 done
